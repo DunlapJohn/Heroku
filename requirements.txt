@@ -123,7 +123,6 @@ SQLAlchemy==1.4.37
 stack-data==0.2.0
 starlette==0.19.1
 streamlit==1.8.1
-TA-Lib==0.4.24
 tenacity==8.0.1
 terminado==0.13.3
 testpath==0.6.0
