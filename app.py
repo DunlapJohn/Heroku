@@ -7,15 +7,16 @@ import mango
 import streamlit as st
 from sqlalchemy import create_engine
 import psycopg2
+import os
 
 
+DATABASE_URL = os.environ.get('postgres://emyiazqpbkpsib:ae0b97784400b039cb892b3c09b8f07ffff163e00fb18251de127ef0e8c54907@ec2-52-206-182-219.compute-1.amazonaws.com:5432/d9k0a7aiggrtae')
 
-
-DB_NAME = "bldpmfro"
-DB_USER = "bldpmfro"
-DB_HOST = "queenie.db.elephantsql.com"
-DB_PASS = "vTgtl5oHo0l5Ct2huCLEYjEvkJkfwUuG"
-
+DB_NAME = "d9k0a7aiggrtae"
+DB_USER = "emyiazqpbkpsib"
+DB_HOST = "ec2-52-206-182-219.compute-1.amazonaws.com"
+DB_PASS = "ae0b97784400b039cb892b3c09b8f07ffff163e00fb18251de127ef0e8c54907"
+DB_PORT = "5432"
 
 
 
@@ -32,26 +33,26 @@ print('Database Connected Successfully')
 # print('Table Dropped Successfully')
 
 cur.execute("""
-          CREATE TABLE orderbook
-          (index int not null,
-          Date TIMESTAMP not null,
-          price char(64) not null,
-          Size float not null,
-          Taker char(64) NOT NULL,
-          Maker char(64) NOT NULL
+        CREATE TABLE orderbook
+        (index int not null,
+        Date TIMESTAMP not null,
+        price char(64) not null,
+        Size float not null,
+        Taker char(64) NOT NULL,
+        Maker char(64) NOT NULL
         
-          ) 
+        ) 
             """)
 
 conn.commit()    
-  
+
 cur.execute("""
-          CREATE TABLE btc
-          (ID serial primary key,
-          Date TIMESTAMP NOT NULL, 
-          PRICE decimal NOT NULL,
-          OI decimal NOT NULL
-          ) 
+        CREATE TABLE btc
+        (ID serial primary key,
+        Date TIMESTAMP NOT NULL, 
+        PRICE decimal NOT NULL,
+        OI decimal NOT NULL
+        ) 
             """)
 conn.commit()  
 print('Database tables created Successfully')
@@ -200,4 +201,5 @@ while not stop_requested:
             
         except KeyboardInterrupt:
             stop_requested = True
+
 
