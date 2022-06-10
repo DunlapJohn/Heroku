@@ -1,216 +1,188 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-import time
-from mpldatacursor import datacursor
-import datetime
-import mango
-import streamlit as st
-from sqlalchemy import create_engine
-import psycopg2
-import os
-from flask import Flask
 import dash
 from dash.dependencies import Input, Output, State
 import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 
-def create_app():
-    server = Flask(__name__)
-    app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True)
-    app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
-    app.server.config["SQLALCHEMY_DATABASE_URI"] = 'postgres://emyiazqpbkpsib:ae0b97784400b039cb892b3c09b8f07ffff163e00fb18251de127ef0e8c54907@ec2-52-206-182-219.compute-1.amazonaws.com:5432/d9k0a7aiggrtae'
+from flask_sqlalchemy import SQLAlchemy
+from flask import Flask
 
-    DB_NAME = "d9k0a7aiggrtae"
-    DB_USER = "emyiazqpbkpsib"
-    DB_HOST = "ec2-52-206-182-219.compute-1.amazonaws.com"
-    DB_PASS = "ae0b97784400b039cb892b3c09b8f07ffff163e00fb18251de127ef0e8c54907"
-    DB_PORT = "5432"
+# app requires "pip install psycopg2" as well
 
+server = Flask(__name__)
+app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True)
+app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# for your home PostgreSQL test table
+# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:your_password@localhost/test"
 
-    conn = psycopg2.connect(database = DB_NAME, user = DB_USER, password = DB_PASS, host = DB_HOST )
+# for your live Heroku PostgreSQL database
+app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://emyiazqpbkpsib:ae0b97784400b039cb892b3c09b8f07ffff163e00fb18251de127ef0e8c54907@ec2-52-206-182-219.compute-1.amazonaws.com:5432/d9k0a7aiggrtae"
 
-    cur = conn.cursor()
-    engine = create_engine('postgresql://bldpmfro:vTgtl5oHo0l5Ct2huCLEYjEvkJkfwUuG@queenie.db.elephantsql.com/bldpmfro')
-    con = engine.connect()
-
-    print('Database Connected Successfully')
-
-    # cur.execute('Drop Table orderbook')
-    # cur.execute('Drop Table btc')
-    # print('Table Dropped Successfully')
-
-    cur.execute("""
-            CREATE TABLE orderbook
-            (index int not null,
-            Date TIMESTAMP not null,
-            price char(64) not null,
-            Size float not null,
-            Taker char(64) NOT NULL,
-            Maker char(64) NOT NULL
-            
-            ) 
-                """)
-
-    conn.commit()    
-
-    cur.execute("""
-            CREATE TABLE btc
-            (ID serial primary key,
-            Date TIMESTAMP NOT NULL, 
-            PRICE decimal NOT NULL,
-            OI decimal NOT NULL
-            ) 
-                """)
-    conn.commit()  
-    print('Database tables created Successfully')
-
-    stop_requested = False
-    while not stop_requested:
-            try:
-                with mango.ContextBuilder.build(cluster_name="mainnet") as context:
-                    pause_seconds = 15
-                    market = mango.market(context, "BTC-PERP")
-                    event_queue = mango.PerpEventQueue.load(context, market.event_queue_address, market.lot_size_converter)
-                    book = (event_queue.fills)
-                    data=pd.DataFrame(book)
-                    if not data.empty:
-                        data=data.astype(str)
-                        print(data)
+db = SQLAlchemy(app.server)
 
 
-                        data[0] = data[0].str.replace('SELL','',regex=True)
-                        data[0] = data[0].str.replace('BUY','',regex=True)
-                        data[0] = data[0].str.replace(' M','_',regex=True)
-                        data[0] = data[0].str.replace('__','-',regex=True)
-                        data[0] = data[0].str.replace('at ','_',regex=True)
-                        data[0] = data[0].str.replace('r-','_',regex=True)
-                        data[0] = data[0].str.replace('r:','_',regex=True)
-                        data[0] = data[0].str.replace(', ','_',regex=True)
-                        data[0] = data[0].str.replace('[','_',regex=True)
-                        data[0] = data[0].str.replace(']','_',regex=True)
-                        data[0] = data[0].str.replace(' _','_',regex=True)
-                        data[0] = data[0].str.replace('_ ','_',regex=True)
-                        data[0] = data[0].str.replace('--','_',regex=True)
-                        data[0] = data[0].str.replace('___','_',regex=True)
-                        data[0] = data[0].str.replace(',at,','_',regex=True)
-                        data[0] = data[0].str.replace(',_','_',regex=True)
-                        data[0] = data[0].str.replace('_','_',regex=True)
-                        data[0] = data[0].str.replace(',/,','_',regex=True)
-                        data[0] = data[0].str.replace(']-','_',regex=True)
-                        data[0] = data[0].str.replace('[','',regex=True)
-                        
-                        data = data[0].str.split('_', expand=True)
-            
-                        #cd NewMangoProject  streamlit run marketstack.py
-                        data=data.astype(str)
-                        data.rename(columns = {2:'Size', 3:'Price', 4:'Date',7:'Maker', 9:'Taker'}, inplace = True)
-                        data=data[[ 'Date','Size', 'Price', 'Maker','Taker']]
-                        
-                        data['Date'] = data['Date'].str.replace('[','',regex=True)
-                        data['Taker'] = data['Taker'].str.replace(', ',',_',regex=True)
-                        
-                        data = data.drop_duplicates()
+class Product(db.Model):
+    __tablename__ = 'productlist'
 
-                        
-                        data.rename(columns = {'Taker':'taker', 'Date':'date','Price':'price', 'Size':'size','Maker':'maker', 'Taker':'taker'}, inplace = True)
-                        
-                        data = pd.DataFrame(data)
-                        data['date'] = pd.to_datetime(data['date'])
-                        data['date'] = data['date'].dt.tz_localize(None)
-                        data['price'].apply(pd.to_numeric, errors='coerce')
-                        
+    Phone = db.Column(db.String(40), nullable=False, primary_key=True)
+    Version = db.Column(db.String(40), nullable=False)
+    Price = db.Column(db.Integer, nullable=False)
+    Sales = db.Column(db.Integer, nullable=False)
 
-                        data.to_sql(name='orderbook',con=con, if_exists='append')
-                        Query = ("select * from orderbook")
-                        cur.execute(Query)
-                        data = cur.fetchall()
-                        st.write(data)
-                        data=pd.DataFrame(data)
-                        data[1] = pd.to_datetime(data[1])
-                        
-                        # data['y'] = np.where(data[3] > 1,1,0)
-                        # data = data.loc[data['y']==1]
-                    
-                        data = data.sort_values([2,1], ascending=[True,True])
-                        st.write(data)
-                        
-                        x=data[1]
-                        y=data[2]
-                        # Ploting Order Book Data
-                        fig, ax1 = plt.subplots(1, figsize=(12,6))
-                        
-                        fig.set_size_inches(16.5, 8.5)
-                        lines = ax1.scatter(x,y, label ="Maker")
-                        ax1.set_xlabel('date')
-                        ax1.set_ylabel('price')
-                        datacursor(lines)
-                        st.pyplot(fig)
-                        
-                        data=pd.DataFrame(data)
-                        data1=data.groupby([4])[2].sum()
-                        data2=data.groupby([5])[2].sum()
-                        data2 = data2.astype('string')
+    def __init__(self, phone, version, price, sales):
+        self.Phone = phone
+        self.Version = version
+        self.Price = price
+        self.Sales = sales
 
-                        fig, ax1 = plt.subplots(1, figsize=(12,6))
-                        
-                        fig.set_size_inches(16.5, 8.5)
-                        lines = ax1.scatter(x,y, label ="Maker")
-                        ax1.set_xlabel('date')
-                        ax1.set_ylabel('price')
-                        datacursor(lines)
-                        st.pyplot(fig)
-                        
-                        
-                    
-                    
-                    # data = str(data)
-                    
-                    # cur.execute("INSERT INTO orderbook (taker) values (%s)",[data])
-                    
-                    print('Orderbook data inserted successfully')
-                    # print('done')
-                    with mango.ContextBuilder.build() as context:
-                        pause_seconds = 10
-                        perp_market = mango.PerpMarket.ensure(mango.market(context, 'BTC-PERP'))   
-                        market = perp_market.fetch_funding(context)
-                        st.write(market)
-                        market = pd.DataFrame([market])
-                        st.table(market)
-                        market['open_interest_BTC']=market['open_interest'].apply(pd.to_numeric, errors='coerce')
-                        market['oracle_price']=market['oracle_price'].apply(pd.to_numeric, errors='coerce')
-                        market['open_interest']=market['oracle_price']*market['open_interest_BTC']
-                        market = market[['oracle_price','from_','open_interest']]
 
-                        b=market[['oracle_price']].iloc[0]
-                        b=b.item()
-                        b = float(b)
-                        
-                        a=market[['open_interest']].iloc[0]
-                        a=a.item()
-                        a = float(a)
-                        # datetime object containing current date and time
-                        now = datetime.datetime.now()
-                        dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-                        print(dt_string, b, a)
+# ------------------------------------------------------------------------------------------------
 
-                        cur.execute("SET datestyle = dmy")
-                        conn.commit()
+app.layout = html.Div([
+    html.Div([
+        dcc.Input(
+            id='adding-rows-name',
+            placeholder='Enter a column name...',
+            value='',
+            style={'padding': 10}
+        ),
+        html.Button('Add Column', id='adding-columns-button', n_clicks=0)
+    ], style={'height': 50}),
 
-                        cur.execute("INSERT INTO btc (Date, Price, OI) values ( %s, %s, %s)",(dt_string, b, a))
+    dcc.Interval(id='interval_pg', interval=86400000*7, n_intervals=0),  # activated once/week or when page refreshed
+    html.Div(id='postgres_datatable'),
 
-                        conn.commit()
+    html.Button('Add Row', id='editing-rows-button', n_clicks=0),
+    html.Button('Save to PostgreSQL', id='save_to_postgres', n_clicks=0),
 
-                    print('BTC data inserted successfully')
-                    print(f"Pausing for {pause_seconds} seconds.\n")
-                    time.sleep(pause_seconds)
-                
-                
-                
-            except KeyboardInterrupt:
-                stop_requested = True
-    if __name__ == '__main__':
-        app.run_server(debug=True)
-    return app
+    # Create notification when saving to excel
+    html.Div(id='placeholder', children=[]),
+    dcc.Store(id="store", data=0),
+    dcc.Interval(id='interval', interval=1000),
+
+    dcc.Graph(id='my_graph')
+
+])
+
+
+# ------------------------------------------------------------------------------------------------
+
+
+@app.callback(Output('postgres_datatable', 'children'),
+              [Input('interval_pg', 'n_intervals')])
+def populate_datatable(n_intervals):
+    df = pd.read_sql_table('productlist', con=db.engine)
+    return [
+        dash_table.DataTable(
+            id='our-table',
+            columns=[{
+                         'name': str(x),
+                         'id': str(x),
+                         'deletable': False,
+                     } if x == 'Sales' or x == 'Phone'
+                     else {
+                'name': str(x),
+                'id': str(x),
+                'deletable': True,
+            }
+                     for x in df.columns],
+            data=df.to_dict('records'),
+            editable=True,
+            row_deletable=True,
+            filter_action="native",
+            sort_action="native",  # give user capability to sort columns
+            sort_mode="single",  # sort across 'multi' or 'single' columns
+            page_action='none',  # render all of the data at once. No paging.
+            style_table={'height': '300px', 'overflowY': 'auto'},
+            style_cell={'textAlign': 'left', 'minWidth': '100px', 'width': '100px', 'maxWidth': '100px'},
+            style_cell_conditional=[
+                {
+                    'if': {'column_id': c},
+                    'textAlign': 'right'
+                } for c in ['Price', 'Sales']
+            ]
+
+        ),
+    ]
+
+
+@app.callback(
+    Output('our-table', 'columns'),
+    [Input('adding-columns-button', 'n_clicks')],
+    [State('adding-rows-name', 'value'),
+     State('our-table', 'columns')],
+    prevent_initial_call=True)
+def add_columns(n_clicks, value, existing_columns):
+    if n_clicks > 0:
+        existing_columns.append({
+            'name': value, 'id': value,
+            'renamable': True, 'deletable': True
+        })
+    return existing_columns
+
+
+@app.callback(
+    Output('our-table', 'data'),
+    [Input('editing-rows-button', 'n_clicks')],
+    [State('our-table', 'data'),
+     State('our-table', 'columns')],
+    prevent_initial_call=True)
+def add_row(n_clicks, rows, columns):
+    if n_clicks > 0:
+        rows.append({c['id']: '' for c in columns})
+    return rows
+
+
+@app.callback(
+    Output('my_graph', 'figure'),
+    [Input('our-table', 'data')],
+    prevent_initial_call=True)
+def display_graph(data):
+    # df_fig = pd.DataFrame(data)
+    # fig = px.bar(df_fig, x='Phone', y='Sales')
+
+    pg_filtered = db.session.query(Product.Phone, Product.Sales)
+    phone_c = [x.Phone for x in pg_filtered]
+    sales_c = [x.Sales for x in pg_filtered]
+    fig = go.Figure([go.Bar(x=phone_c, y=sales_c)])
+
+    return fig
+
+
+@app.callback(
+    [Output('placeholder', 'children'),
+     Output("store", "data")],
+    [Input('save_to_postgres', 'n_clicks'),
+     Input("interval", "n_intervals")],
+    [State('our-table', 'data'),
+     State('store', 'data')],
+    prevent_initial_call=True)
+def df_to_csv(n_clicks, n_intervals, dataset, s):
+    output = html.Plaintext("The data has been saved to your PostgreSQL database.",
+                            style={'color': 'green', 'font-weight': 'bold', 'font-size': 'large'})
+    no_output = html.Plaintext("", style={'margin': "0px"})
+
+    input_triggered = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+
+    if input_triggered == "save_to_postgres":
+        s = 6
+        pg = pd.DataFrame(dataset)
+        pg.to_sql("productlist", con=db.engine, if_exists='replace', index=False)
+        return output, s
+    elif input_triggered == 'interval' and s > 0:
+        s = s - 1
+        if s > 0:
+            return output, s
+        else:
+            return no_output, s
+    elif s == 0:
+        return no_output, s
+
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
